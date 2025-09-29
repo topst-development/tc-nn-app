@@ -34,7 +34,7 @@
 /* ========================================================================== */
 #define DEFAULT_NETWORK_PATH_1 "/usr/share/yolov5s_quantized/"
 #define DEFAULT_NETWORK_PATH_2 "/usr/share/mobilenetv2_10_quantized/"
-#define DEFAULT_INPUT_PATH "/dev/video0"
+#define DEFAULT_INPUT_PATH "/dev/video2"
 #define DEFAULT_OUTPUT_PATH "/dev/overlay"
 #define DEFAULT_INPUT_WIDTH 1280
 #define DEFAULT_INPUT_HEIGHT 720
@@ -1541,5 +1541,6 @@ int main(int argc, char **argv)
 
 	return 0;
 }
+
 
 
