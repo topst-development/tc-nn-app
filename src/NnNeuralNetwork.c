@@ -64,14 +64,14 @@ npu_usage_info_t g_npuCurrUsageInfo[NPU_CLUSTER_INDEX_MAX];
 static void *NnRunInferenceFunc1(void *args)
 {
 	inference_context_t *pContext = (inference_context_t *)args;
-    NnRunInference(&(pContext->neuralNetwork[NETWORK_INDEX_0]), pContext->npuRunMode);
+	NnRunInference(&(pContext->neuralNetwork[NETWORK_INDEX_0]), pContext->npuRunMode);
 	return NULL;
 }
 
 static void *NnRunInferenceFunc2(void *args)
 {
 	inference_context_t *pContext = (inference_context_t *)args;
-    NnRunInference(&(pContext->neuralNetwork[NETWORK_INDEX_1]), pContext->npuRunMode);
+	NnRunInference(&(pContext->neuralNetwork[NETWORK_INDEX_1]), pContext->npuRunMode);
 	return NULL;
 }
 
@@ -86,7 +86,6 @@ NNAPP_ERRORTYPE NnNpuInit(inference_context_t *pContext, int32_t clusterIndex)
 	if (idx < NPU_CLUSTER_INDEX_MAX)
 	{
 		pContext->npuFd[idx] = npu_open(clusterIndex);
-		// pContext->npuClusterIdx++;
 
 		printf("The npu cluster[%d] is open done.\n", clusterIndex);
 	}
@@ -128,7 +127,7 @@ uint32_t alignInputDataWidth(uint32_t networkInputWidth, uint32_t multiple)
     return nextMultiple;
 }
 
-NNAPP_ERRORTYPE NnNeuralNetworkInit(inference_context_t *pContext, npu_cluster_index_t npuClusterIndex, network_index_t networkIndex, uint8_t scalerIndex, image_fmt_t fmt) //, npu_cluster_index_t npuIdx, uint8_t *networkPath)
+NNAPP_ERRORTYPE NnNeuralNetworkInit(inference_context_t *pContext, npu_cluster_index_t npuClusterIndex, network_index_t networkIndex, uint8_t scalerIndex, image_fmt_t fmt)
 {
 	NNAPP_ERRORTYPE err = NNAPP_NO_ERROR;
 	npu_t *npu;
@@ -136,7 +135,6 @@ NNAPP_ERRORTYPE NnNeuralNetworkInit(inference_context_t *pContext, npu_cluster_i
 	char sofile[SO_BUFFER_SIZE];
 	char cmdfile[CMD_BUFFER_SIZE];
 	char paramfile[PARAM_BUFFER_SIZE];
-	// npu_perf_t npu_perf; // for profile mode
 
 	npu = pContext->npuFd[npuClusterIndex];
 	neuralNetwork = &pContext->neuralNetwork[networkIndex];
@@ -144,12 +142,17 @@ NNAPP_ERRORTYPE NnNeuralNetworkInit(inference_context_t *pContext, npu_cluster_i
 	sprintf(sofile, "%s/%s", neuralNetwork->networkPath, SO_FILE);
 	sprintf(cmdfile, "%s/%s", neuralNetwork->networkPath, CMD_FILE);
 	sprintf(paramfile, "%s/%s", neuralNetwork->networkPath, PARAM_FILE);
+	printf("network files:\n");
+	printf("  so    : %s\n", sofile);
+	printf("  cmd   : %s\n", cmdfile);
+	printf("  param : %s\n", paramfile);
 
 	// load network
 	neuralNetwork->networkHandle = network_load_from_file(npu, sofile, cmdfile, paramfile);
 	if (!neuralNetwork->networkHandle)
 	{
 		printf("npu_fd(%d) - network loading failed\n", npu->fd);
+		return NNAPP_PARAMETER_ERROR;
 	}
 	else
 	{
@@ -297,11 +300,14 @@ void NnRunInference(network_context_t *pNeuralNetwork, npu_run_mode_t npuRunMode
 	if (pNeuralNetwork->type == TELECHIPS_NPU_POST_CLASSIFIER)
 	{
 		network_run_postprocess(pNeuralNetwork->networkHandle, pNeuralNetwork->outputBuf, &(pNeuralNetwork->resultCls));
+#if 0 // Inference Debug
 		NN_LOG("[Post-Process] class[0] : %d\n", pNeuralNetwork->resultCls.class_ids[0]);
+#endif
 	}
 	else if (pNeuralNetwork->type == TELECHIPS_NPU_POST_DETECTOR)
 	{
 		network_run_postprocess(pNeuralNetwork->networkHandle, pNeuralNetwork->outputBuf, &(pNeuralNetwork->resultObj));
+#if 0 // Inference Debug
 		for (int i = 0; i < pNeuralNetwork->resultObj.cnt; i++)
 		{
 			NN_LOG("[Post-Process] min_xy(%4d,%4d) max_xy(%4d,%4d) class: %d score: %d\n",
@@ -312,6 +318,7 @@ void NnRunInference(network_context_t *pNeuralNetwork, npu_run_mode_t npuRunMode
 				   pNeuralNetwork->resultObj.obj[i].cls,
 				   (int)(pNeuralNetwork->resultObj.obj[i].score * 100. + 0.5));
 		}
+#endif
 	}
 	else if (pNeuralNetwork->type == TELECHIPS_NPU_POST_CUSTOM)
 	{
@@ -428,7 +435,7 @@ void *runNpuResourcesMonitorThread(void *pData)
 
 	NN_LOG("[INFO] [%s] start!\n", __FUNCTION__);
 
-	pthread_mutex_init(&pContext->npuUsageLocker, NULL); // TODO: Fix NnPerf.h
+	pthread_mutex_init(&pContext->npuUsageLocker, NULL);
 
 	while (NnCheckExitFlag() != true)
 	{

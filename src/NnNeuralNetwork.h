@@ -43,14 +43,14 @@
 #define CMD_FILE   "npu_cmd.bin"
 #define PARAM_FILE "quantized_network.bin"
 
-#define DEFAULT_NPU_MONITOR_PERIOD_US (1000*1000)
+#define DEFAULT_NPU_MONITOR_PERIOD_US (1000 * 1000)
 
 /* ========================================================================== */
 /*                          Function Declarations                             */
 /* ========================================================================== */
 NNAPP_ERRORTYPE NnNpuInit(inference_context_t *pContext, int32_t clusterIndex);
 NNAPP_ERRORTYPE NnNpuDeinit(inference_context_t *pContext);
-NNAPP_ERRORTYPE NnNeuralNetworkInit(inference_context_t *pContext, npu_cluster_index_t npuClusterIndex, network_index_t networkIndex, uint8_t scalerIndex, image_fmt_t fmt);//, npu_cluster_index_t npuIdx, uint8_t *networkPath)
+NNAPP_ERRORTYPE NnNeuralNetworkInit(inference_context_t *pContext, npu_cluster_index_t npuClusterIndex, network_index_t networkIndex, uint8_t scalerIndex, image_fmt_t fmt);
 NNAPP_ERRORTYPE NnNeuralNetworkDeinit(inference_context_t *pContext, network_index_t networkIndex);
 NNAPP_ERRORTYPE NnCreateInferenceThread(inference_context_t *pContext);
 NNAPP_ERRORTYPE NnDestroyInferenceThread();

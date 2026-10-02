@@ -32,7 +32,6 @@
 /* ========================================================================== */
 /*                            Global Variables                                */
 /* ========================================================================== */
-// static int scalerFd[SCALER_INDEX_MAX] = {-1, -1};
 
 /* ========================================================================== */
 /*                          Function Definitions                              */
@@ -146,7 +145,6 @@ int32_t ScalerResize(ScalerHandle handle, scaler_index_t scalerIndex, scaler_siz
 
 	struct SCALER_TYPE scaler_info;
 	scaler_context_t *pContext = (scaler_context_t *)handle;
-	// printf("ScalerResize scalerIndex:%d\n", scalerIndex);
 
 	if(SCALER_INDEX_0 <= scalerIndex && scalerIndex < SCALER_INDEX_MAX)
 	{
@@ -154,7 +152,7 @@ int32_t ScalerResize(ScalerHandle handle, scaler_index_t scalerIndex, scaler_siz
 		memset(&scaler_info, 0, sizeof(struct SCALER_TYPE));
 
 		/* set scaler response type : interrupt */
-		scaler_info.responsetype = SCALER_INTERRUPT;//SCALER_POLLING;
+		scaler_info.responsetype = SCALER_INTERRUPT;
 
 		/* source setting */
 		scaler_info.src_Yaddr = scalerSrc.pmap;
@@ -180,7 +178,6 @@ int32_t ScalerResize(ScalerHandle handle, scaler_index_t scalerIndex, scaler_siz
 		scaler_info.dest_ImgHeight = scalerDes.height;
 		scaler_info.dest_fmt = scalerDes.format;
 
-		// printf("[INFO] [SCALER_API] Frame Resize : input[%8lx,%dx%d] -> output[%8lx,%dx%d]\n", scalerSrc.pmap, scalerSrc.width, scalerSrc.height, scalerDes.pmap, scalerDes.width, scalerDes.height);
 		/* executing scaler */
 		ret = ioctl(pContext->scalerFd[scalerIndex], TCC_SCALER_IOCTRL, (uint64_t)&scaler_info);
 		if(ret < 0)
@@ -203,7 +200,7 @@ int32_t ScalerCropResize(ScalerHandle handle, scaler_index_t scalerIndex, scaler
 		memset(&scaler_info, 0, sizeof(struct SCALER_TYPE));
 
 		/* set scaler response type : interrupt */
-		scaler_info.responsetype = SCALER_INTERRUPT;//SCALER_POLLING;
+		scaler_info.responsetype = SCALER_INTERRUPT;
 
 		/* source setting */
 		scaler_info.src_Yaddr = scalerSrc.pmap;
@@ -229,7 +226,6 @@ int32_t ScalerCropResize(ScalerHandle handle, scaler_index_t scalerIndex, scaler
 		scaler_info.dest_ImgHeight = scalerDes.height;
 		scaler_info.dest_fmt = scalerDes.format;
 
-		// printf("[INFO] [SCALER_API] input[%8lx,(%d, %d), (%d, %d)] -> output[%8lx,%dx%d]\n", scalerSrc.pmap, cropXMin, cropYMin, cropXMax, cropYMax, scalerDes.pmap, scalerDes.width, scalerDes.height);
 		/* executing scaler */
 		ret = ioctl(pContext->scalerFd[scalerIndex], TCC_SCALER_IOCTRL, (uint64_t)&scaler_info);
 		if(ret < 0)
@@ -244,7 +240,6 @@ int32_t ScalerCropResize(ScalerHandle handle, scaler_index_t scalerIndex, scaler
 	return ret;
 }
 
-// fail: -1, sucess: 0
 int32_t ScalerPoll(ScalerHandle handle, scaler_index_t scalerIndex)
 {
 	int32_t ret = 0;

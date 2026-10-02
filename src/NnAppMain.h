@@ -32,8 +32,8 @@
 /* ========================================================================== */
 #include <stdint.h>
 #include <math.h>
-#include <execinfo.h> // to use backtrace
-#include <signal.h> // to use sigaction
+#include <execinfo.h>
+#include <signal.h>
 #include <pthread.h>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -46,14 +46,13 @@
 #include "NnPerf.h"
 #include "NnMemory.h"
 #include "NnNeuralNetwork.h"
+#include "NnSignalHandler.h"
 
 #include "camera_api.h"
 #include "display_api.h"
 #include "scaler_api.h"
 #include "message_api.h"
-
-#include "NnSignalHandler.h"
-
+#include "time_api.h"
 #include "opencv_api.h"
 
 /* ========================================================================== */
@@ -65,11 +64,11 @@ typedef struct param_info
 	uint8_t networkCnt;
 	char* inputPath;
 	char* outputPath;
-	uint16_t inputWidth;
-	uint16_t inputHeight;
+	int16_t inputWidth;
+	int16_t inputHeight;
 	image_fmt_t inputFormat;
-	uint16_t outputWidth;
-	uint16_t outputHeight;
+	int16_t outputWidth;
+	int16_t outputHeight;
 	image_fmt_t outputFormat;
 	uint8_t npuIdx[NPU_CLUSTER_INDEX_MAX];
 	input_data_type_t inputMode;
@@ -113,8 +112,9 @@ typedef struct app_context
 	encoding_mode_t encodingMode;
 
 	//input > camera
-	uint8_t camCaptureRetryCnt;
+
 	//input > file
+
 	//input > rtpm
 	uint8_t inputRtpmBufferCount;
 	uint32_t inputRtpmBufferIndex;

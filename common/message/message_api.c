@@ -194,7 +194,7 @@ int32_t MessageOpen(MessageHandle handle, message_stream_status_t streamMode, ui
 						pContext->pmSendBuffer[bufIndex].length = bufferSize;
 						pContext->pmSendBuffer[bufIndex].phyAddr = baseOffset[bufIndex];
 
-						memFd = open("/dev/mem", O_RDWR | O_SYNC);
+						memFd = open("/dev/nn_mem", O_RDWR | O_SYNC);
 						if (memFd < 0)
 						{
 							printf("[%s] mem open error\n", __FUNCTION__);
@@ -242,7 +242,7 @@ int32_t MessageOpen(MessageHandle handle, message_stream_status_t streamMode, ui
 						pContext->pmRecvBuffer[bufIndex].length = bufferSize;
 						pContext->pmRecvBuffer[bufIndex].phyAddr = baseOffset[bufIndex];
 
-						memFd = open("/dev/mem", O_RDWR | O_SYNC);
+						memFd = open("/dev/nn_mem", O_RDWR | O_SYNC);
 						if (memFd < 0)
 						{
 							printf("[%s] mem open error\n", __FUNCTION__);
@@ -386,11 +386,9 @@ int32_t MessagePopReceiveBuffer(MessageHandle handle, uint8_t **virtualAddr, uin
 			{
 				if (popInfo->pBuffer == pContext->pmRecvBuffer[bufIndex].virAddr)
 				{
-					// Need to parsing header
 					*virtualAddr = pContext->pmRecvBuffer[bufIndex].virAddr;
 					*baseOffset = pContext->pmRecvBuffer[bufIndex].phyAddr;
 					*syncStamp = popInfo->seqNum;
-					// size = pContext->pmRecvBuffer[bufIndex].length;		  // popInfo->bufferSize
 					pContext->popInfo[bufIndex] = popInfo;
 					break;
 				}
@@ -461,15 +459,12 @@ int32_t MessagePopSendBuffer(MessageHandle handle, uint8_t **virtualAddr, uint64
 			popInfo->seqNum = sentSyncStamp++;
 			popInfo->timestamp = 0;
 
-			// printf("[%s] Pop Buffer : %p / %d\n", __FUNCTION__,  popInfo->pBuffer, idx);
 			if (idx < pContext->sendBufferCount)
 			{
 				if (popInfo->pBuffer == pContext->pmSendBuffer[idx].virAddr)
 				{
-					// Need to parsing header
 					*virtualAddr = pContext->pmSendBuffer[idx].virAddr;
 					*baseOffset = pContext->pmSendBuffer[idx].phyAddr;
-					// size = pContext->pmSendBuffer[*bufferIndex].length;
 					pContext->popInfo[idx] = popInfo;
 					*bufferIndex = idx;
 				}

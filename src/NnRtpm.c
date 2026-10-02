@@ -137,15 +137,11 @@ void SendNpuUsage(MessageHandle handle)
 
 	getNPUUsage(&context);
 
-	// pthread_mutex_lock(&pContext->npuUsageLocker);
-
 	(void)RtpmSendNpuUsage(handle,
 							context.currentNpuUsage[NPU_CLUSTER_INDEX_0].perfDmaUsage,
 							context.currentNpuUsage[NPU_CLUSTER_INDEX_0].perfCompUsage,
 							context.currentNpuUsage[NPU_CLUSTER_INDEX_1].perfDmaUsage,
 							context.currentNpuUsage[NPU_CLUSTER_INDEX_1].perfCompUsage);
-
-	// pthread_mutex_unlock(&pContext->npuUsageLocker);
 }
 
 int32_t RtpmSendNpuUsage(MessageHandle handle, uint32_t npu0Dma, uint32_t npu0Comp, uint32_t npu1Dma, uint32_t npu1Comp)

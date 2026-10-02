@@ -133,7 +133,7 @@ cam_status_t CameraGetStatus(CameraHandle handle)
 
 int32_t CameraOpenDevice(CameraHandle handle, char *inputDevName)
 {
-	int32_t ret = -1;
+	int32_t ret = 0;
 
 	cam_context_t *pContext = (cam_context_t *)handle;
 
@@ -173,7 +173,7 @@ int32_t CameraOpenDevice(CameraHandle handle, char *inputDevName)
 
 int32_t CameraCloseDevice(CameraHandle handle)
 {
-	int32_t ret = -1;
+	int32_t ret = 0;
 
 	cam_context_t *pContext = (cam_context_t *)handle;
 
@@ -183,20 +183,37 @@ int32_t CameraCloseDevice(CameraHandle handle)
 		{
 			ReleaseVirtAddr(pContext->camBuffer);
 		}
+		else
+		{
+			app_debug_printf("[ERROR] [CAMERA_API] [%s] Device is not streaming\n", __FUNCTION__);
+			ret = -1;
+		}
 
-		ret = close(pContext->fd);
-		if (ret == 0)
+		int type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+		if (ioctl(pContext->fd, VIDIOC_STREAMOFF, &type) < 0)
+		{
+			app_debug_printf("[ERROR] [CAMERA_API] [%s] Stream Off error\n", __FUNCTION__);
+			ret = -1;
+		}
+		else
+		{
+			app_debug_printf("[INFO] [CAMERA_API] [%s] Stream Off\n", __FUNCTION__);
+		}
+
+		if (close(pContext->fd) == 0)
 		{
 			pContext->status = CAMERA_STATUS_IDLE;
 		}
 		else
 		{
 			app_debug_printf("[ERROR] [CAMERA_API] [%s] Device close error\n", __FUNCTION__);
+			ret = -1;
 		}
 	}
 	else
 	{
 		app_debug_printf("[ERROR] [CAMERA_API] [%s] Device is not prepared\n", __FUNCTION__);
+		ret = -1;
 	}
 
 	return ret;
@@ -230,7 +247,6 @@ int32_t CameraSetConfig(CameraHandle handle, uint32_t width, uint32_t height)
 				uint32_t bufIndex;
 				for (bufIndex = 0; bufIndex < pContext->reqBuffer.count; bufIndex++)
 				{
-					// struct v4l2_buffer *bufferInfo = &pContext->camBuffer[bufIndex]->v4l2Buffer;
 					struct v4l2_buffer bufferInfo;
 					memset(&planes, 0, sizeof(planes));
 					memset(&bufferInfo, 0, sizeof(bufferInfo));
@@ -270,11 +286,12 @@ int32_t CameraSetConfig(CameraHandle handle, uint32_t width, uint32_t height)
 				int type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 				if (ioctl(pContext->fd, VIDIOC_STREAMON, &type) < 0)
 				{
-					printf("VIDIOC_STREAMON\n");
+					app_debug_printf("[ERROR] [CAMERA_API] [%s] VIDIOC_STREAMON error\n", __FUNCTION__);
 					exit(1);
 				}
 				else
 				{
+					app_debug_printf("[INFO] [CAMERA_API] [%s] VIDIOC_STREAMON success\n", __FUNCTION__);
 					pContext->status = CAMERA_STATUS_STREAMING;
 				}
 			}
@@ -296,13 +313,14 @@ int32_t CameraSetConfig(CameraHandle handle, uint32_t width, uint32_t height)
 	return ret;
 }
 
-uint32_t CameraGetBuffer(CameraHandle handle, uint8_t **virtualAddr, uint64_t *baseOffset)
+int32_t CameraGetBuffer(CameraHandle handle, uint8_t **virtualAddr, uint64_t *baseOffset)
 {
-	uint32_t size = 0;
+	int32_t ret = 0;
+	int32_t ioctlResult = 0;
 
 	cam_context_t *pContext = (cam_context_t *)handle;
 
-	if (pContext->status > CAMERA_STATUS_OPENED)
+	if (pContext->status == CAMERA_STATUS_STREAMING)
 	{
 		memset(&(pContext->bufferInfo), 0, sizeof(struct v4l2_buffer));
 		memset(&(pContext->planes), 0, sizeof(struct v4l2_plane)*3);
@@ -310,41 +328,42 @@ uint32_t CameraGetBuffer(CameraHandle handle, uint8_t **virtualAddr, uint64_t *b
 		pContext->bufferInfo.memory = (uint32_t)V4L2_MEMORY_MMAP;
 		pContext->bufferInfo.m.planes = pContext->planes;
 		pContext->bufferInfo.length = 1;
-		size = ioctl(pContext->fd, VIDIOC_DQBUF, &(pContext->bufferInfo));
-		if (size == 0)
+
+		ioctlResult = ioctl(pContext->fd, VIDIOC_DQBUF, &(pContext->bufferInfo));
+		if (ioctlResult == 0)
 		{
 			*virtualAddr = pContext->camBuffer[pContext->bufferInfo.index].virAddr;
 			*baseOffset = pContext->camBuffer[pContext->bufferInfo.index].phyAddr;
-			size = pContext->camBuffer[pContext->bufferInfo.index].length;
 		}
 		else
 		{
-			*virtualAddr = NULL;
-			*baseOffset = 0ull;
-			app_debug_printf("[ERROR] [CAMERA_API] [%s] Dequeue error\n", __FUNCTION__);
+			app_debug_printf("[ERROR] [CAMERA_API] [%s] Dequeue error (ioctl result: %d)\n", __FUNCTION__, ioctlResult);
+			ret = -1;
 		}
 	}
 	else
 	{
-		app_debug_printf("[ERROR] [CAMERA_API] [%s] Device is not prepared\n", __FUNCTION__);
+		app_debug_printf("[ERROR] [CAMERA_API] [%s] Device is not streaming (status: %d)\n", __FUNCTION__, pContext->status);
+		ret = -1;
 	}
 
-	return size;
+	return ret;
 }
 
-uint32_t CameraReleaseBuffer(CameraHandle handle)
+int32_t CameraReleaseBuffer(CameraHandle handle)
 {
-	uint32_t ret;
+	int32_t ret = 0;
 	cam_context_t *pContext = (cam_context_t *)handle;
 
 	if (ioctl(pContext->fd, VIDIOC_QBUF, &(pContext->bufferInfo)) < 0)
 	{
-		printf("VIDIOC_QBUF error\n");
-		ret = 0;
+		app_debug_printf("[ERROR] [CAMERA_API] [%s] VIDIOC_QBUF error\n", __FUNCTION__);
+		ret = -1;
 	}
 	else
 	{
-		ret = 1;
+		// app_debug_printf("[INFO] [CAMERA_API] [%s] VIDIOC_QBUF success\n", __FUNCTION__);
+		ret = 0;
 	}
 	return ret;
 }

@@ -69,10 +69,6 @@ static int getReservedMemory(const char *pmapName, unsigned long *base, unsigned
     return ret;
 }
 
-//Design how to set reserved memory in the app.
-//Direct access, as used in ApplicationMemoryInit() and NnOutputModeInit(), is not recommended.
-//Design how to get reserved memory in the app.
-//refer to wiki - https://wiki.telechips.com/pages/viewpage.action?pageId=521251557
 uint64_t ReservedMemoryGetFilePhyBase(memory_context_t *pContext)
 {
 	uint64_t ret;
@@ -112,13 +108,14 @@ NNAPP_ERRORTYPE ReservedMemoryInit(memory_context_t *pContext)
     return err;
 }
 
-NNAPP_ERRORTYPE ApplicationMemoryInit(memory_context_t *pContext, char* inputPath, uint32_t outputWidth, uint32_t outputHeight) //TODO need to change Param variable to context
+NNAPP_ERRORTYPE ApplicationMemoryInit(memory_context_t *pContext, char* inputPath, uint32_t outputWidth, uint32_t outputHeight)
 {
 	NNAPP_ERRORTYPE err = NNAPP_NO_ERROR;
 
 	// Initialize Display Memory Driver
 	pContext->displayMemoryFd = open("/dev/mem", O_RDWR | O_NDELAY);
-	if ((pContext->fileMemoryFd < 0) || (pContext->displayMemoryFd < 0))
+
+	if (pContext->displayMemoryFd < 0)
 	{
 		printf("[ERROR] open() error display: /dev/mem\n");
 		exit(1);
@@ -161,6 +158,8 @@ NNAPP_ERRORTYPE ApplicationMemoryInit(memory_context_t *pContext, char* inputPat
 	if(pContext->map_base_output[0] == MAP_FAILED)
 	{
 		printf("[ERROR] [%s] mmap fail map_base_output[0]\n", __FUNCTION__);
+		close(pContext->displayMemoryFd);
+		pContext->displayMemoryFd = -1;
 		exit(1);
 	}
 	else
@@ -172,6 +171,8 @@ NNAPP_ERRORTYPE ApplicationMemoryInit(memory_context_t *pContext, char* inputPat
 	if(pContext->map_base_output[1] == MAP_FAILED)
 	{
 		printf("[ERROR] [%s] mmap fail map_base_output[1]\n", __FUNCTION__);
+		close(pContext->displayMemoryFd);
+		pContext->displayMemoryFd = -1;
 		exit(1);
 	}
 	else
@@ -208,6 +209,12 @@ NNAPP_ERRORTYPE NnMemoryDeinit(memory_context_t *pContext, uint32_t outputWidth,
 	{
 		perror("Error unmapping map_base_output[1]");
 		err = -1; // NNAPP_MEMORY_DEINIT_ERROR
+	}
+
+	if (pContext->displayMemoryFd >= 0)
+	{
+		close(pContext->displayMemoryFd);
+		pContext->displayMemoryFd = -1;
 	}
 
 	return err;
