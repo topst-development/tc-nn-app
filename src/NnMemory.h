@@ -67,7 +67,6 @@
 typedef struct _memory_context
 {
 	int32_t displayMemoryFd;
-	int32_t fileMemoryFd;
 	uint64_t phy_base_output[2];
 	uint8_t *map_base_output[2];
 	/* # reservedMemory: Memory reserved for specific scenarios in tcnnapp.

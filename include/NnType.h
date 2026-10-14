@@ -130,7 +130,7 @@ typedef struct _perf_api
 
 typedef struct _perf_context
 {
-	perf_api_t pPerfInfo; // TODO:
+	perf_api_t pPerfInfo;
 	double fps;
 } perf_context_t;
 
@@ -160,20 +160,25 @@ typedef struct _network_context
 	char *networkPath;
 	npu_net_t *networkHandle;
 	long long convMacNum;
+
 	//input tensor
 	npu_buf_t *inputBuf;;
 	int32_t inputBufferSize;
 	uint32_t nnWidth;
 	uint32_t nnHeight;
 	image_fmt_t nnFormat;
+
 	// scaler_index_t scalerIdx;
 	uint8_t scalerIdx;
+
 	//output tensor
 	npu_buf_t *outputBuf;
 	int32_t outputBufferSize;
+
 	//inferenceResult
 	float inferenceTime;
 	float npuUtilization;
+
 	//post-porcess
 	enlight_postproc_t type;
 	enlight_batch_cls_t resultCls;
@@ -183,7 +188,6 @@ typedef struct _network_context
 typedef struct _inference_context
 {
 	npu_t *npuFd[NPU_CLUSTER_INDEX_MAX];
-	npu_cluster_index_t npuClusterIdx; //>??
 	npu_run_mode_t npuRunMode;
 	network_context_t neuralNetwork[NETWORK_INDEX_MAX];
 	uint8_t neuralNetworkCnt;

@@ -57,9 +57,6 @@
 #define CAMERA_DEV_NAME_2 "/dev/video2"
 #define CAMERA_DEV_NAME_3 "/dev/video3"
 
-#define CAM_RETRY_CNT 100
-
-#define TELECHIPS_DEBUG
 #ifdef TELECHIPS_DEBUG
     #define app_debug_printf(...) printf(__VA_ARGS__)
 #else
@@ -73,25 +70,24 @@ typedef enum cam_status
 	CAMERA_STATUS_STREAMING
 } cam_status_t;
 
-//remain support format
 typedef enum cam_format
 {
 	CAMERA_FORMAT_RGB32 = 0,
 	CAMERA_FORMAT_RGB24
 } cam_format_t;
 
-typedef void (*CameraHandle)(void);
+typedef void *CameraHandle;
 
 /* ========================================================================== */
 /*                          Function Declarations                             */
 /* ========================================================================== */
 
-int32_t CameraCreate(CameraHandle *pContext);
+int32_t CameraCreate(CameraHandle *pHandle);
 int32_t CameraDestroy(CameraHandle handle);
 int32_t CameraOpenDevice(CameraHandle handle, char* inputDevName);
 int32_t CameraCloseDevice(CameraHandle handle);
 int32_t CameraSetConfig(CameraHandle handle, uint32_t width, uint32_t height);
-uint32_t CameraGetBuffer(CameraHandle handle, uint8_t **virtualAddr, uint64_t *baseOffset);
-uint32_t CameraReleaseBuffer(CameraHandle handle);
+int32_t CameraGetBuffer(CameraHandle handle, uint8_t **virtualAddr, uint64_t *baseOffset);
+int32_t CameraReleaseBuffer(CameraHandle handle);
 cam_status_t CameraGetStatus(CameraHandle handle);
 #endif //__CAMERA_API_H__

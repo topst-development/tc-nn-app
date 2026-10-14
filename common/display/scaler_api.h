@@ -51,12 +51,14 @@
 #define GET_ADDR_YUV420_spV(Uaddr, x, y) 	(((((unsigned int)Uaddr+(x*y/4)) + ALIGN_BIT) >> BIT_0)<<BIT_0)
 #define GET_ADDR_YUV422_spV(Uaddr, x, y) 	(((((unsigned int)Uaddr+(x*y/2)) + ALIGN_BIT) >> BIT_0)<<BIT_0)
 #define SCALER_DEV_NAME_0 "/dev/scaler1"
-#define SCALER_DEV_NAME_1 "/dev/scaler3"
+#define SCALER_DEV_NAME_1 "/dev/scaler2"
+#define SCALER_DEV_NAME_2 "/dev/scaler3"
 
 typedef enum _scaler_index
 {
 	SCALER_INDEX_0 = 0,
 	SCALER_INDEX_1,
+    // SCALER_INDEX_2,
 	SCALER_INDEX_MAX
 } scaler_index_t;
 
@@ -94,7 +96,7 @@ typedef struct _scaler_context
 	int32_t scalerFd[SCALER_INDEX_MAX];
 } scaler_context_t;
 
-typedef void (*ScalerHandle)(void);
+typedef void *ScalerHandle;
 
 /* ========================================================================== */
 /*                          Function Declarations                             */

@@ -347,7 +347,7 @@ typedef struct _message_context
 
 } message_context_t;
 
-typedef void (*MessageHandle)(void);
+typedef void *MessageHandle;
 
 /* ========================================================================== */
 /*                          Function Declarations                             */

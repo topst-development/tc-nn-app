@@ -31,8 +31,6 @@
 
 #include "opencv_api.h"
 
-static cv::Scalar ccolorArray[NETWORK_INDEX_MAX] = {cv::Scalar(0, 255, 0), cv::Scalar(0, 0, 255)};
-
 /**
  * @brief Draws dynamic information (FPS, Network Info, Memory Usage, NPU Info) on an image.
  *
@@ -101,7 +99,6 @@ void cvDrawInfo(unsigned char *desBuffer, uint32_t outputWidth, uint32_t outputH
 
 	// Draw the text on the image
 	cv::putText(image, buf, cv::Point(scaledXPos, scaledYPos), cv::FONT_HERSHEY_SIMPLEX, fontSize * wScale, cv::Scalar(textColor.b, textColor.g, textColor.r));
-	// cv::putText(image, buf, cv::Point(scaledXPos, scaledYPos), cv::FONT_HERSHEY_SIMPLEX, 1.2 * wScale, cv::Scalar(textColor.b, textColor.g, textColor.r));
 }
 
 /**
@@ -150,7 +147,6 @@ void cvDrawBoxes(unsigned char *desBuffer, Box_t *boxes, int boxCount,
 
 		/* Draw the label text near the bounding box */
 		cv::putText(image, buf, cv::Point(xMin, yMin - textOffset), cv::FONT_HERSHEY_SIMPLEX, fontSize, cv::Scalar(textColor.b, textColor.g, textColor.r));
-		// cv::putText(image, buf, cv::Point(xMin, yMin - textOffset), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(textColor.b, textColor.g, textColor.r));
 	}
 }
 

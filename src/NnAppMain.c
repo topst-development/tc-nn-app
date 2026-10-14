@@ -28,11 +28,12 @@
 /*                             Include Files                                  */
 /* ========================================================================== */
 #include "NnAppMain.h"
+#include "version.h"
 
 /* ========================================================================== */
 /*                           Macros & Typedefs                                */
 /* ========================================================================== */
-#define DEFAULT_NETWORK_PATH_1 "/usr/share/yolov5s_quantized/"
+#define DEFAULT_NETWORK_PATH_1 "/usr/share/yolov8s_quantized/"
 #define DEFAULT_NETWORK_PATH_2 "/usr/share/mobilenetv2_10_quantized/"
 #define DEFAULT_INPUT_PATH "/dev/video2"
 #define DEFAULT_OUTPUT_PATH "/dev/overlay"
@@ -48,10 +49,22 @@
 #define DEFAULT_NETWORK_INDEX NETWORK_INDEX_MAX
 #define DEFAULT_OUTPUT_SX 0
 #define DEFAULT_OUTPUT_SY 0
-#define INPUT_RTPM_WIDTH 1280
-#define INPUT_RTPM_HEIGHT 720
-#define OUTPUT_RTPM_WIDTH 1280
-#define OUTPUT_RTPM_HEIGHT 720
+#define DEFAULT_INPUT_RTPM_WIDTH 1280
+#define DEFAULT_INPUT_RTPM_HEIGHT 720
+#define DEFAULT_OUTPUT_RTPM_WIDTH 1280
+#define DEFAULT_OUTPUT_RTPM_HEIGHT 720
+#define DEFAULT_OUTPUT_FILE_WIDTH 1920
+#define DEFAULT_OUTPUT_FILE_HEIGHT 1080
+
+#define MAXIMUM_INPUT_WIDTH 1920
+#define MAXIMUM_INPUT_HEIGHT 1080
+#define MAXIMUM_OUTPUT_WIDTH 1920
+#define MAXIMUM_OUTPUT_HEIGHT 720
+#define MAXIMUM_INPUT_RTPM_WIDTH 1280
+#define MAXIMUM_INPUT_RTPM_HEIGHT 720
+#define MAXIMUM_OUTPUT_RTPM_WIDTH 1280
+#define MAXIMUM_OUTPUT_RTPM_HEIGHT 720
+
 #define DEFAULT_TARGET_IP_ADDRESS "192.168.0.8"
 
 #define INTERACTIVE_MODE
@@ -71,8 +84,8 @@ static void NnparseArgs(param_info_t *param, int argc, char** argv);
 static void NnprintUsage(void);
 static void NnModeChecker(param_info_t *param);
 static void NnInitAppContext(app_context_t *pContext, param_info_t *pParam);
+static bool NnIsImageMovementValid(int moveDx, int moveDy, int outputImageWidth, int outputImageHeight, int displayWidth, int displayHeight);
 
-static float NnGetFPS();
 static int32_t NnCreateAPI(app_context_t *pContext, app_obj_t *pObj);
 static int32_t NnDestroyAPI(app_context_t *pContext, app_obj_t *pObj);
 
@@ -97,7 +110,6 @@ static void NnPerfMonitorInit(app_context_t *pContext, MessageHandle msgHandle);
 static void NnPerfMonitorDeinit(app_context_t *pContext);
 
 static void NnShowUsage(int32_t argc, char *argv[]);
-static int32_t adjustRes(uint16_t *punXres, uint16_t *punYres);
 
 #ifdef INTERACTIVE_MODE
 static void *NnInteractive(void *arg);
@@ -126,7 +138,7 @@ static const struct {
 /* ========================================================================== */
 /*                            Global Variables                                */
 /* ========================================================================== */
-uint64_t syncStamp = 0; //global
+uint64_t syncStamp = 0;
 app_obj_t g_AppObj;
 pthread_t g_InteractiveThread = (pthread_t)NULL;
 
@@ -139,7 +151,7 @@ static char menu[] = {
 	"\n"
 	"\n c: TBD"
 	"\n"
-	"\n p: TBD"
+	"\n p: Performance"
 	"\n"
 	"\n x: Exit"
 	"\n"
@@ -180,12 +192,14 @@ static void NnShowUsage(int32_t argc, char *argv[])
 static void *NnInteractive(void *arg)
 {
 	char ch;
-	(void)arg;
+	app_context_t *pContext = (app_context_t *)arg;
 
 	while (NnCheckExitFlag() != true)
 	{
 		printf("%s", menu);
 		ch = getchar();
+		while (getchar() != '\n');
+
 		printf("\n");
 
 		switch (ch)
@@ -195,6 +209,9 @@ static void *NnInteractive(void *arg)
 			break;
 		case 'p':
 			// TBD
+			printf(" ========================================================\n");
+			printf(" 1. FPS : [%.3f]\n", pContext->perfContext.fps);
+			printf(" ========================================================\n");
 			break;
 		case 'e':
 			// TBD
@@ -265,8 +282,8 @@ static void NnparseArgs(param_info_t *param, int argc, char** argv)
 				{
 					param->inputMode = INPUT_MODE_RTPM;
 					param->inputFormat = IMAGE_FMT_RGB24;
-					param->inputWidth = INPUT_RTPM_WIDTH;
-					param->inputHeight = INPUT_RTPM_HEIGHT;
+					param->inputWidth = DEFAULT_INPUT_RTPM_WIDTH;
+					param->inputHeight = DEFAULT_INPUT_RTPM_HEIGHT;
 				}
 				else if(strcmp(optarg, "file") == 0)
 				{
@@ -290,13 +307,15 @@ static void NnparseArgs(param_info_t *param, int argc, char** argv)
 				{
 					param->outputMode = OUTPUT_MODE_RTPM;
 					param->outputFormat = IMAGE_FMT_RGB24;
-					param->outputWidth = OUTPUT_RTPM_WIDTH;
-					param->outputHeight = OUTPUT_RTPM_HEIGHT;
+					param->outputWidth = DEFAULT_OUTPUT_RTPM_WIDTH;
+					param->outputHeight = DEFAULT_OUTPUT_RTPM_HEIGHT;
 				}
 				else if(strcmp(optarg, "file") == 0)
 				{
 					param->outputMode = OUTPUT_MODE_FILE;
 					param->outputFormat = IMAGE_FMT_RGB24;
+					param->outputWidth = DEFAULT_OUTPUT_FILE_WIDTH;
+					param->outputHeight = DEFAULT_OUTPUT_FILE_HEIGHT;
 				}
 				else
 				{
@@ -404,13 +423,6 @@ static void NnparseArgs(param_info_t *param, int argc, char** argv)
 		}
 	}
 
-   	if (param->outputMode == OUTPUT_MODE_LCD) {
-    	int32_t bAdjust = adjustRes(&param->outputWidth, &param->outputHeight);
-    	if (bAdjust == -1) {
-        	printf("---!!!! adusting resolution failed\n");
-    	}
-	}
-
 	printf("----------------Parameter Info----------------\n");
 	printf("\n");
 	printf("[Network1]Network Path         : %s\n", param->networkPath[0]);
@@ -454,60 +466,16 @@ static void NnprintUsage(void)
 	printf("---------------- Usage ----------------\n\n");
 }
 
-
-static int32_t adjustRes(uint16_t *punXres, uint16_t *punYres) {
-	int resfd = -1;
-
-    printf("[Info] reading framebuffer resolution from fb@0\n");
-	resfd = open("/proc/device-tree/fb@0/xres", O_RDONLY);
-	if(resfd > 0)
-	{
-		char buf[4];
-		uint32_t xRes = 0;
-		int bytes_read = read(resfd, buf, sizeof(buf));
-		if(bytes_read > 0)
-		{
-			memcpy(&xRes, buf, 4);
-			xRes = __builtin_bswap32(xRes);
-		}
-
-		*punXres = (xRes >= *punXres)? *punXres : xRes;
-		close(resfd);
-	} else {
-		return -1;
-	}	
-
-	resfd = open("/proc/device-tree/fb@0/yres", O_RDONLY);
-	if(resfd > 0)
-	{
-		char buf[4];
-		uint32_t yRes = 0;
-		int bytes_read = read(resfd, buf, sizeof(buf));
-		if(bytes_read > 0)
-		{
-			memcpy(&yRes, buf, 4);
-			yRes = __builtin_bswap32(yRes);
-		}
-		*punYres = (yRes >= *punYres)? *punYres : yRes;
-		close(resfd);
-	} else {
-		return -1;
-	}	
-
-	printf("####### finall Witdh = %d and Height=%d\n", *punXres, *punYres);
-	return 0;
-}
-
 static void NnModeChecker(param_info_t *param)
 {
 
-	if(param->inputMode == INPUT_MODE_RTPM && param->outputMode != OUTPUT_MODE_RTPM)
+	if (param->inputMode == INPUT_MODE_RTPM && param->outputMode != OUTPUT_MODE_RTPM)
 	{
 		printf("When the Input Mode is set to RTPM, the Output Mode cannot be set to anything other than RTPM.\n");
 
 		exit(0);
 	}
-	else if(param->inputMode == INPUT_MODE_FILE && param->outputMode == OUTPUT_MODE_RTPM)
+	else if (param->inputMode == INPUT_MODE_FILE && param->outputMode == OUTPUT_MODE_RTPM)
 	{
 		printf("When the Input Mode is set to File, it is not possible to set the Output Mode to RTPM.\n");
 
@@ -537,6 +505,44 @@ static void NnModeChecker(param_info_t *param)
 
 		fclose(file);
 	}
+	else if(param->inputMode == INPUT_MODE_CAMERA)
+	{
+		if (param->inputWidth <= 0 || param->inputWidth > MAXIMUM_INPUT_WIDTH)
+		{
+			printf("[WARN] The allowed range for Camera input width is [1] to [%d].\n", MAXIMUM_INPUT_WIDTH);
+			exit(0);
+		}
+		else if (param->inputHeight <= 0 || param->inputHeight > MAXIMUM_INPUT_HEIGHT)
+		{
+			printf("[WARN] The allowed range for Camera input height is [1] to [%d].\n", MAXIMUM_INPUT_HEIGHT);
+			exit(0);
+		}
+		else
+		{
+			// NN_LOG("Camera width and height setting done.\n");
+		}
+	}
+	else if(param->inputMode == INPUT_MODE_RTPM)
+	{
+		if (param->inputWidth <= 0 || param->inputWidth > MAXIMUM_INPUT_RTPM_WIDTH)
+		{
+			printf("[WARN] The allowed range for RTPM input width is [1] to [%d].\n", MAXIMUM_INPUT_RTPM_WIDTH);
+			exit(0);
+		}
+		else if (param->inputHeight <= 0 || param->inputHeight > MAXIMUM_INPUT_RTPM_HEIGHT)
+		{
+			printf("[WARN] The allowed range for RTPM input height is [1] to [%d].\n", MAXIMUM_INPUT_RTPM_HEIGHT);
+			exit(0);
+		}
+		else
+		{
+			// NN_LOG("RTPM width and height setting done.\n");
+		}
+	}
+	else
+	{
+		// TBD
+	}
 
 	if(param->outputMode == OUTPUT_MODE_FILE)
 	{
@@ -552,6 +558,71 @@ static void NnModeChecker(param_info_t *param)
 			exit(0);
 		}
 	}
+	else if(param->outputMode == OUTPUT_MODE_LCD)
+	{
+		if (param->outputWidth <= 0 || param->outputWidth > MAXIMUM_OUTPUT_WIDTH)
+		{
+			printf("[WARN] The allowed range for LCD output width is [1] to [%d].\n", MAXIMUM_OUTPUT_WIDTH);
+			exit(0);
+		}
+		else if (param->outputHeight <= 0 || param->outputHeight > MAXIMUM_OUTPUT_HEIGHT)
+		{
+			printf("[WARN] The allowed range for LCD output height is [1] to [%d].\n", MAXIMUM_OUTPUT_HEIGHT);
+			exit(0);
+		}
+		else
+		{
+			// NN_LOG("LCD width and height setting done.\n");
+		}
+
+		/* Check Movement Valid */
+		if(!NnIsImageMovementValid(param->outputSx, param->outputSy, param->outputWidth, param->outputHeight, DEFAULT_OUTPUT_WIDTH, DEFAULT_OUTPUT_HEIGHT))
+		{
+			exit(0);
+		}
+	}
+	else if(param->outputMode == OUTPUT_MODE_RTPM)
+	{
+		if (param->outputWidth <= 0 || param->outputWidth > MAXIMUM_OUTPUT_RTPM_WIDTH)
+		{
+			printf("[WARN] The allowed range for RTPM output width is [1] to [%d].\n", MAXIMUM_OUTPUT_RTPM_WIDTH);
+			exit(0);
+		}
+		else if (param->outputHeight <= 0 || param->outputHeight > MAXIMUM_OUTPUT_RTPM_HEIGHT)
+		{
+			printf("[WARN] The allowed range for RTPM output height is [1] to [%d].\n", MAXIMUM_OUTPUT_RTPM_HEIGHT);
+			exit(0);
+		}
+		else
+		{
+			// NN_LOG("RTPM width and height setting done.\n");
+		}
+	}
+	else
+	{
+		// TBD
+	}
+}
+
+static bool NnIsImageMovementValid(int moveDx, int moveDy, int outputImageWidth, int outputImageHeight, int displayWidth, int displayHeight)
+{
+	printf("[INFO] Checking if output image movement (%d, %d) from (0, 0) is valid within display (%d, %d) for image size (%d, %d)...\n", moveDx, moveDy, displayWidth, displayHeight, outputImageWidth, outputImageHeight);
+
+	if (moveDx < 0 || moveDy < 0)
+	{
+		printf("[DEBUG] Movement invalid - New top-left position (%d, %d) is negative.\n", moveDx, moveDy);
+		return false;
+	}
+
+	if (moveDx + outputImageWidth > displayWidth || moveDy + outputImageHeight > displayHeight)
+	{
+		printf("[DEBUG] Movement invalid - New bottom-right position (%d, %d) is beyond display bounds (%d, %d).\n", moveDx + outputImageWidth, moveDy + outputImageHeight, displayWidth, displayHeight);
+		return false;
+	}
+
+	printf("[INFO] Movement validity check completed\n");
+
+	return true;
 }
 
 static void NnInitAppContext(app_context_t *pContext, param_info_t *pParam)
@@ -563,13 +634,11 @@ static void NnInitAppContext(app_context_t *pContext, param_info_t *pParam)
 	pContext->inferenceContext.neuralNetwork[NETWORK_INDEX_0].networkPath = pParam->networkPath[NETWORK_INDEX_0];
 	pContext->inferenceContext.neuralNetwork[NETWORK_INDEX_1].networkPath = pParam->networkPath[NETWORK_INDEX_1];
 
-	//TODO: npuFD init
 	pContext->debugMode = pParam->debugMode;
 	pContext->inferenceContext.npuDebugMode = pParam->npuDebugMode;
 	pContext->inferenceContext.npuRunMode = pParam->npuRunMode;
 
 	pContext->memory_context.displayMemoryFd = 0;
-	pContext->memory_context.fileMemoryFd = 0;
 
 	pContext->phy_base_input = 0;
 	pContext->map_base_input = NULL;
@@ -580,8 +649,6 @@ static void NnInitAppContext(app_context_t *pContext, param_info_t *pParam)
 
 	pContext->phy_base_output_idx = 0;
 
-	//TODO //reserved mem variable init
-
 	pContext->inputDataType = pParam->inputMode;
 	pContext->inputImageFormat = pParam->inputFormat;
 	pContext->inputWidth = pParam->inputWidth;
@@ -590,12 +657,11 @@ static void NnInitAppContext(app_context_t *pContext, param_info_t *pParam)
 
 	if(pContext->inputDataType == INPUT_MODE_CAMERA)
 	{
-		pContext->camCaptureRetryCnt = CAM_RETRY_CNT;
+		// TBD
 	}
 	else if(pContext->inputDataType == INPUT_MODE_FILE)
 	{
-		// pContext->inputPath = pParam->inputPath;
-
+		// TBD
 	}
 	else if(pContext->inputDataType == INPUT_MODE_RTPM)
 	{
@@ -617,8 +683,7 @@ static void NnInitAppContext(app_context_t *pContext, param_info_t *pParam)
 	}
 	else if(pContext->outputDataType == OUTPUT_MODE_FILE)
 	{
-		// pContext->outputPath = pParam->outputPath;
-
+		// TBD
 	}
 	else if(pContext->outputDataType == OUTPUT_MODE_RTPM)
 	{
@@ -634,18 +699,6 @@ static void NnInitAppContext(app_context_t *pContext, param_info_t *pParam)
 
 	pContext->outputWidth = pParam->outputWidth;
 	pContext->outputHeight = pParam->outputHeight;
-}
-
-static float NnGetFPS()
-{
-	static struct timeval bgn, end;
-	float fps;
-
-	gettimeofday(&end, NULL);
-	fps = 1000.0 / (((end.tv_sec - bgn.tv_sec) * 1000.0) + ((end.tv_usec - bgn.tv_usec) / 1000.0));
-	gettimeofday(&bgn, NULL);
-
-	return fps;
 }
 
 static void NnInputModeInit(app_context_t *pContext, CameraHandle CameraHandle, MessageHandle msgHandle)
@@ -749,7 +802,7 @@ static void NnInputModeDeinit(app_context_t *pContext, CameraHandle CameraHandle
 	}
 	else if(pContext->inputDataType == INPUT_MODE_FILE)
 	{
-		// TODO:
+		// TBD
 	}
 	else if(pContext->inputDataType == INPUT_MODE_RTPM)
 	{
@@ -877,23 +930,23 @@ static int32_t NnScalerInit(ScalerHandle handle)
 	ret = ScalerOpenDevice(handle, SCALER_DEV_NAME_0, SCALER_INDEX_0);
 	if (ret < 0)
 	{
-		NN_LOG("[ERROR] ScalerOpenDevice() error : /dev/scaler1 \n");
+		NN_LOG("[ERROR] ScalerOpenDevice() error : %s \n", SCALER_DEV_NAME_0);
 		exit(EXIT_FAILURE);
 	}
 	else
 	{
-		NN_LOG("[INFO] ScalerOpenDevice() success : /dev/scaler1 \n");
+		NN_LOG("[INFO] ScalerOpenDevice() success : %s \n", SCALER_DEV_NAME_0);
 	}
 
-	ret = ScalerOpenDevice(handle, SCALER_DEV_NAME_1, SCALER_INDEX_1);
+	ret = ScalerOpenDevice(handle, SCALER_DEV_NAME_2, SCALER_INDEX_1);
 	if (ret < 0)
 	{
-		NN_LOG("[ERROR] ScalerOpenDevice() error : /dev/scaler3 \n");
+		NN_LOG("[ERROR] ScalerOpenDevice() error : %s \n", SCALER_DEV_NAME_2);
 		exit(EXIT_FAILURE);
 	}
 	else
 	{
-		NN_LOG("[INFO] ScalerOpenDevice() success : /dev/scaler3 \n");
+		NN_LOG("[INFO] ScalerOpenDevice() success : %s \n", SCALER_DEV_NAME_2);
 	}
 
 	return ret;
@@ -908,36 +961,19 @@ static void NnScalerDenit(ScalerHandle handle)
 
 static void NnGetFrame(app_context_t *pContext, CameraHandle CameraHandle, MessageHandle msgHandle)
 {
-	int32_t sizeRet = -1;
 	input_data_type_t inputMode = pContext->inputDataType;
-	int32_t retryCnt;
 
 	if(inputMode == INPUT_MODE_CAMERA)
 	{
-		retryCnt = pContext->camCaptureRetryCnt;
-
-		while((sizeRet <= 0) && (retryCnt > 0))
-		{
-			sizeRet = CameraGetBuffer(CameraHandle, &pContext->map_base_input, &pContext->phy_base_input);
-			if(sizeRet <= 0)
-			{
-				usleep(1000);
-				retryCnt--;
-			}
-			else
-			{
-				retryCnt = CAM_RETRY_CNT;
-				break;
-			}
-		}
+		CameraGetBuffer(CameraHandle, &pContext->map_base_input, &pContext->phy_base_input);
 	}
 	else if(inputMode == INPUT_MODE_FILE)
 	{
-		sizeRet = cvLoadImage(pContext->map_base_input, pContext->inputPath, &(pContext->inputWidth), &(pContext->inputHeight));
+		cvLoadImage(pContext->map_base_input, pContext->inputPath, &(pContext->inputWidth), &(pContext->inputHeight));
 	}
 	else if(inputMode == INPUT_MODE_RTPM)
 	{
-		sizeRet = MessagePopReceiveBuffer(msgHandle, &pContext->map_base_input, &pContext->phy_base_input, &syncStamp);
+		MessagePopReceiveBuffer(msgHandle, &pContext->map_base_input, &pContext->phy_base_input, &syncStamp);
 	}
 	else
 	{
@@ -1032,6 +1068,11 @@ static void NnResizeInputFrame(app_context_t *pContext, ScalerHandle handle)
 		}
 
 		ScalerResize(handle, scalerIdx, scalerSrc, scalerDes);
+	}
+
+	for(uint8_t i = 0; i < nnCnt; i++)
+	{
+		scalerIdx = pContext->inferenceContext.neuralNetwork[i].scalerIdx;
 		ScalerPoll(handle, scalerIdx);
 	}
 }
@@ -1165,7 +1206,7 @@ static void NnDrawResult(app_context_t *pContext)
 	currentYPos += spacing;
 	cvDrawInfo(outputMapBase, outputWidth, outputHeight, DRAW_INFO_MEMORY, pContext->perfContext.pPerfInfo.memUsage, 0, baseXPos, currentYPos, fontSize, whiteColor);
 
-	cvDrawInfo(outputMapBase, outputWidth, outputHeight, DRAW_INFO_FPS, NnGetFPS(), 0, 100, 100, fontSize, whiteColor);
+	cvDrawInfo(outputMapBase, outputWidth, outputHeight, DRAW_INFO_FPS, pContext->perfContext.fps, 0, 100, 100, fontSize, whiteColor);
 }
 
 static int32_t NnOutputResultFrame(app_context_t *pContext, DisplayHandle dispHandle, MessageHandle msgHandle)
@@ -1277,7 +1318,7 @@ static int32_t NnOutputResultData(app_context_t *pContext, MessageHandle msgHand
 	else if(output_mode == OUTPUT_MODE_FILE)
 	{
 		/* File mode */
-		// TODO : Save yolo format or coco format
+		// TBD
 	}
 	else /* OUTPUT_MODE_LCD mode */
 	{
@@ -1457,11 +1498,17 @@ int main(int argc, char **argv)
 	app_context_t *pContext = NULL;
 	param_info_t *pParam = NULL;
 	app_obj_t *pObj = &g_AppObj;
+	double bgn = 0;
+	double end = 0;
+	NNAPP_ERRORTYPE err = NNAPP_NO_ERROR;
 
 	pContext = (app_context_t *)malloc(sizeof(app_context_t));
 	pParam = (param_info_t *)malloc(sizeof(param_info_t));
 
 	/* Initialize */
+	printf("\n ========================================\n");
+	printf("         tc-nn-app VERSION %d.%d.%d\n", TCNN_VERSION_MAJOR, TCNN_VERSION_MINOR, TCNN_VERSION_PATCH);
+	printf(" ========================================\n\n");
 	NnparseArgs(pParam, argc, argv);																				// Parsing parameters
 	NnModeChecker(pParam);																							// Check mode
 	NnInitAppContext(pContext, pParam);																				// Init App Context
@@ -1480,25 +1527,42 @@ int main(int argc, char **argv)
 	NnNpuInit(&pContext->inferenceContext, NPU_CLUSTER_INDEX_0);
 	NnNpuInit(&pContext->inferenceContext, NPU_CLUSTER_INDEX_1);
 
-	NnNeuralNetworkInit(&pContext->inferenceContext, NPU_CLUSTER_INDEX_0 ,NETWORK_INDEX_0, SCALER_INDEX_0, IMAGE_FMT_RGB24); // Init Network, set pipeline, npu cluster - network
-	NnNeuralNetworkInit(&pContext->inferenceContext, NPU_CLUSTER_INDEX_1, NETWORK_INDEX_1, SCALER_INDEX_1, IMAGE_FMT_RGB24); // Init Network, set pipeline, npu cluster - network
+	err = NnNeuralNetworkInit(&pContext->inferenceContext, NPU_CLUSTER_INDEX_0 ,NETWORK_INDEX_0, SCALER_INDEX_0, IMAGE_FMT_RGB24); // Init Network, set pipeline, npu cluster - network
+	if (err != NNAPP_NO_ERROR) {
+		printf("[ERROR] Network1 initialization failed: %d\n", err);
+		return 1;
+	}
+	err = NnNeuralNetworkInit(&pContext->inferenceContext, NPU_CLUSTER_INDEX_1, NETWORK_INDEX_1, SCALER_INDEX_1, IMAGE_FMT_RGB24); // Init Network, set pipeline, npu cluster - network
+	if (err != NNAPP_NO_ERROR) {
+		printf("[ERROR] Network2 initialization failed: %d\n", err);
+		return 1;
+	}
 #else                                             // Single Cluster
 	NnNpuInit(&pContext->inferenceContext, NPU_CLUSTER_INDEX_0);
 
-	NnNeuralNetworkInit(&pContext->inferenceContext, NPU_CLUSTER_INDEX_0 ,NETWORK_INDEX_0, SCALER_INDEX_0, IMAGE_FMT_RGB24); // Init Network, set pipeline, npu cluster - network
-	NnNeuralNetworkInit(&pContext->inferenceContext, NPU_CLUSTER_INDEX_0, NETWORK_INDEX_1, SCALER_INDEX_1, IMAGE_FMT_RGB24); // Init Network, set pipeline, npu cluster - network
+	err = NnNeuralNetworkInit(&pContext->inferenceContext, NPU_CLUSTER_INDEX_0 ,NETWORK_INDEX_0, SCALER_INDEX_0, IMAGE_FMT_RGB24); // Init Network, set pipeline, npu cluster - network
+	if (err != NNAPP_NO_ERROR) {
+		printf("[ERROR] Network1 initialization failed: %d\n", err);
+		return 1;
+	}
+	err = NnNeuralNetworkInit(&pContext->inferenceContext, NPU_CLUSTER_INDEX_0, NETWORK_INDEX_1, SCALER_INDEX_1, IMAGE_FMT_RGB24); // Init Network, set pipeline - network
+	if (err != NNAPP_NO_ERROR) {
+		printf("[ERROR] Network2 initialization failed: %d\n", err);
+		return 1;
+	}
 #endif
 
 #ifdef INTERACTIVE_MODE
-	pthread_create(&g_InteractiveThread, NULL, NnInteractive, NULL);
+	pthread_create(&g_InteractiveThread, NULL, NnInteractive, pContext);
 #endif // _INTERACTIVE_MODE
 
 	/* Run */
 	while(NnCheckExitFlag() != true)
 	{
+		bgn = getCurrentTime();
 		// Step 1. Get frame: 0.1ms
 		NnGetFrame(pContext, pObj->cam_handle, pObj->msg_handle);
-		// Step 2. Resize frame for inference: 10ms
+		// Step 2. Resize frame for inference: 6.2ms
 		NnResizeInputFrame(pContext, pObj->scaler_handle);
 		// Step 3. Run infernce: 15 ~ 20ms, yolov5 + mbv2
 		NnCreateInferenceThread(&pContext->inferenceContext);
@@ -1512,6 +1576,9 @@ int main(int argc, char **argv)
 		NnOutputResultData(pContext, pObj->msg_handle);
 		// Step 8. Release Frame
 		NnReleaseFrame(pContext, pObj->cam_handle, pObj->msg_handle);
+		end = getCurrentTime();
+		pContext->perfContext.fps = 1.0 / (end - bgn);
+		NN_LOG("[INFO] Camera Processing FPS: %.2lf\n", pContext->perfContext.fps);
 	}
 
 	/* Deinitialize */
@@ -1541,6 +1608,5 @@ int main(int argc, char **argv)
 
 	return 0;
 }
-
 
 

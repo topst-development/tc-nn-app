@@ -4,7 +4,13 @@ project(tcnnapp)
 add_definitions(-DTCC7500)
 SET(TCNN_VERSION_MAJOR "2")
 SET(TCNN_VERSION_MINOR "0")
-SET(TCNN_VERSION_PATCH "4")
+SET(TCNN_VERSION_PATCH "5")
+
+configure_file(
+    ${CMAKE_SOURCE_DIR}/include/version.h.in
+    ${CMAKE_SOURCE_DIR}/include/version.h
+    @ONLY
+)
 
 # OpenCV
 find_package(OpenCV REQUIRED)

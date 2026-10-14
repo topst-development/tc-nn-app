@@ -77,7 +77,7 @@ typedef struct _display_context
 	int32_t display_fd;
 } display_context_t;
 
-typedef void (*DisplayHandle)(void);
+typedef void *DisplayHandle;
 
 /* ========================================================================== */
 /*                          Function Declarations                             */
